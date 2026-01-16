@@ -29,8 +29,17 @@ A cross-platform desktop application for creating interactive floor plans with s
 - [x] Stock status indicators (in stock, low stock, out of stock)
 - [x] Color-coded status display
 
+### Phase 4: Spatial Inventory Placement ✅ Complete
+- [x] Drag-and-drop inventory items from panel to floor plan
+- [x] Color-coded inventory markers (green: in stock, orange: low, red: out)
+- [x] Persistent placement storage in database
+- [x] Automatic loading of markers when opening floor plans
+- [x] Search-to-highlight: select item in panel to highlight and center on map
+- [x] Grid snapping for precise marker placement
+- [x] Item tooltips showing details on hover
+- [x] Double-click markers to edit item (via scene signal)
+
 ### Upcoming Phases
-- **Phase 4**: Spatial inventory placement on floor plans
 - **Phase 5**: Google Sheets two-way synchronization
 - **Phase 6**: Export/import (JSON, CSV, PNG, PDF)
 - **Phase 7**: Cross-platform packaging
@@ -87,7 +96,7 @@ On first launch, the application will:
 - Create a database at `~/Library/Application Support/InventoryMapper/inventory_mapper.db` (macOS)
 - Display an empty canvas ready for floor plan creation
 
-### Current Functionality (Phases 1-3)
+### Current Functionality (Phases 1-4)
 
 - **Floor Plan Management:**
   - **Create:** Ctrl+N to create new floor plan with custom name
@@ -114,6 +123,14 @@ On first launch, the application will:
   - **Search:** Real-time full-text search across all inventory
   - **Import CSV:** Tools menu → Import Inventory CSV for bulk loading
   - **Stock Status:** Color-coded indicators (Green=In Stock, Orange=Low, Red=Out)
+
+- **Spatial Inventory Placement:** (Phase 4 - NEW!)
+  - **Drag to Place:** Drag items from inventory panel onto floor plan canvas
+  - **Visual Markers:** Color-coded circular markers show item locations
+  - **Search & Find:** Click item in inventory panel to highlight and center on map
+  - **Persistent Storage:** Marker positions saved and restored with floor plans
+  - **Item Details:** Hover over markers for tooltips with item info
+  - **Grid Snapping:** Markers snap to grid for organized placement
 
 - **Keyboard Shortcuts:**
   - `Ctrl+N`: New floor plan
@@ -200,25 +217,25 @@ pip freeze > requirements.txt
 
 ## Roadmap
 
-### Phase 2: Vector Drawing (Weeks 3-4)
+### Phase 2: Vector Drawing ✅ Complete
 - Rectangle, line, and polygon drawing tools
 - Layer management panel
 - Selection and transform tools
 - Background image import
 - Save/load floor plans
 
-### Phase 3: Inventory Management (Weeks 5-6)
+### Phase 3: Inventory Management ✅ Complete
 - Add/edit/delete inventory items
 - Category and tag management
 - Full-text search
 - CSV import
 - Image upload
 
-### Phase 4: Spatial Inventory (Week 7)
+### Phase 4: Spatial Inventory ✅ Complete
 - Drag inventory items onto floor plan
 - Color-coded markers (stock levels)
 - Search to highlight on map
-- Filter by category
+- Persistent marker storage
 
 ### Phase 5: Google Sheets Sync (Weeks 8-9)
 - OAuth 2.0 authentication

@@ -8,12 +8,59 @@ from typing import Optional, List
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
     QTableWidget, QTableWidgetItem, QPushButton,
-    QComboBox, QLabel, QHeaderView
+    QComboBox, QLabel, QHeaderView, QApplication
 )
-from PySide6.QtCore import Signal, Qt, QTimer
+from PySide6.QtCore import Signal, Qt, QTimer, QMimeData, QByteArray
+from PySide6.QtGui import QDrag
 
 from app.controllers.inventory_controller import InventoryController
 from app.models.inventory_item import InventoryItem
+
+
+class DraggableInventoryTable(QTableWidget):
+    """Custom table widget that supports dragging inventory items."""
+
+    def __init__(self, parent=None):
+        """Initialize draggable table."""
+        super().__init__(parent)
+        self.drag_start_position = None
+
+    def mousePressEvent(self, event):
+        """Store drag start position."""
+        if event.button() == Qt.LeftButton:
+            self.drag_start_position = event.pos()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        """Handle drag initiation."""
+        if not (event.buttons() & Qt.LeftButton):
+            return
+        if not self.drag_start_position:
+            return
+
+        # Check if we've moved far enough to start a drag
+        if (event.pos() - self.drag_start_position).manhattanLength() < QApplication.startDragDistance():
+            return
+
+        # Get the item being dragged
+        item = self.itemAt(self.drag_start_position)
+        if not item:
+            return
+
+        # Get item ID from first column
+        row = item.row()
+        item_id = self.item(row, 0).data(Qt.UserRole)
+        if not item_id:
+            return
+
+        # Create drag with MIME data
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        mime_data.setData("application/x-inventory-item-id", QByteArray(str(item_id).encode()))
+        drag.setMimeData(mime_data)
+
+        # Execute drag
+        drag.exec(Qt.CopyAction)
 
 
 class InventoryPanel(QWidget):
@@ -56,8 +103,8 @@ class InventoryPanel(QWidget):
         search_layout.addWidget(self.search_input)
         layout.addLayout(search_layout)
 
-        # Table
-        self.table = QTableWidget()
+        # Table with drag support
+        self.table = DraggableInventoryTable()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["SKU", "Name", "Quantity", "Min Stock", "Status"])
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)

@@ -34,6 +34,7 @@ class CanvasScene(QGraphicsScene):
     item_added = Signal(QGraphicsItem)
     item_moved = Signal(QGraphicsItem, QPointF, QPointF)
     selection_changed_signal = Signal(list)
+    inventory_marker_double_clicked = Signal(int)  # item_id
 
     def __init__(
         self,

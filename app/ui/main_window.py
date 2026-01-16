@@ -23,10 +23,12 @@ from app.ui.widgets.canvas_scene import CanvasScene
 from app.ui.widgets.canvas_view import CanvasView
 from app.ui.widgets.layer_panel import LayerPanel
 from app.ui.widgets.inventory_panel import InventoryPanel
+from app.ui.graphics_items.inventory_marker import InventoryMarker
 from app.ui.dialogs.item_editor import ItemEditorDialog
 from app.controllers.drawing_controller import DrawingController, DrawingTool
 from app.controllers.inventory_controller import InventoryController
 from app.models.floor_plan import FloorPlan
+from app.models.inventory_item import InventoryItem
 from app.config import get_config
 from app.constants import (
     APP_NAME,
@@ -356,6 +358,7 @@ class MainWindow(QMainWindow):
         self.inventory_panel.btn_edit.clicked.connect(self.edit_inventory_item)
         self.inventory_panel.btn_delete.clicked.connect(self.delete_inventory_item)
         self.inventory_panel.item_double_clicked.connect(self.edit_inventory_item)
+        self.inventory_panel.item_selected.connect(self.on_inventory_item_selected)
 
         # Tools menu - CSV import
         self.action_import_csv.triggered.connect(self.import_inventory_csv)
@@ -363,6 +366,7 @@ class MainWindow(QMainWindow):
         # Canvas signals
         self.view.zoom_changed.connect(self.update_zoom_label)
         self.view.mouse_position_changed.connect(self.update_position_label)
+        self.view.inventory_item_dropped.connect(self.on_inventory_item_dropped)
 
     def toggle_grid(self, checked: bool):
         """
@@ -489,6 +493,9 @@ class MainWindow(QMainWindow):
                 self.drawing_controller.set_floor_plan(floor_plan)
                 self.drawing_controller.load_floor_plan_shapes(floor_plan)
 
+                # Load inventory markers
+                self._load_inventory_markers(floor_plan)
+
                 # Update layer panel
                 self.layer_panel.set_floor_plan(floor_plan)
 
@@ -601,6 +608,136 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Import Errors", f"Imported {count} items with errors:\n\n{error_msg}")
             else:
                 QMessageBox.information(self, "Import Complete", f"Successfully imported {count} items.")
+
+    def on_inventory_item_dropped(self, item_id: int, scene_pos: QPointF):
+        """
+        Handle inventory item dropped on canvas.
+
+        Args:
+            item_id: ID of the inventory item
+            scene_pos: Drop position in scene coordinates
+        """
+        # Check if a floor plan is loaded
+        if not self.current_floor_plan:
+            QMessageBox.warning(
+                self,
+                "No Floor Plan",
+                "Please create or open a floor plan before placing inventory items."
+            )
+            return
+
+        # Load inventory item
+        item = InventoryItem.load(item_id)
+        if not item:
+            QMessageBox.warning(self, "Error", f"Could not load inventory item {item_id}")
+            return
+
+        # Snap to grid if enabled
+        if self.scene.snap_enabled:
+            scene_pos = self.scene.snap_to_grid(scene_pos)
+
+        # Create inventory marker
+        marker = InventoryMarker(item)
+        marker.setPos(scene_pos)
+
+        # Add to scene (no specific layer for now)
+        self.scene.addItem(marker)
+
+        # Save placement to database
+        self._save_inventory_placement(marker)
+
+        # Show status message
+        self.statusBar().showMessage(f"Placed '{item.name}' on floor plan", 3000)
+
+    def _save_inventory_placement(self, marker: InventoryMarker):
+        """
+        Save inventory placement to database.
+
+        Args:
+            marker: Inventory marker to save
+        """
+        from app.models.database import Database
+
+        db = Database()
+        with db.transaction():
+            cursor = db.execute(
+                """
+                INSERT INTO inventory_placements
+                (floor_plan_id, inventory_item_id, x_position, y_position, rotation)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    self.current_floor_plan.id,
+                    marker.item.id,
+                    marker.pos().x(),
+                    marker.pos().y(),
+                    marker.rotation()
+                )
+            )
+            # Store placement ID in marker for future updates
+            marker.placement_id = cursor.lastrowid
+
+    def _load_inventory_markers(self, floor_plan: FloorPlan):
+        """
+        Load inventory markers for a floor plan.
+
+        Args:
+            floor_plan: Floor plan to load markers for
+        """
+        from app.models.database import Database
+
+        db = Database()
+        rows = db.execute(
+            """
+            SELECT id, inventory_item_id, x_position, y_position, rotation
+            FROM inventory_placements
+            WHERE floor_plan_id = ?
+            """,
+            (floor_plan.id,)
+        ).fetchall()
+
+        for row in rows:
+            placement_id, item_id, x, y, rotation = row
+
+            # Load inventory item
+            item = InventoryItem.load(item_id)
+            if not item:
+                continue  # Skip if item was deleted
+
+            # Create marker
+            marker = InventoryMarker(item)
+            marker.setPos(QPointF(x, y))
+            marker.setRotation(rotation)
+            marker.placement_id = placement_id
+
+            # Add to scene
+            self.scene.addItem(marker)
+
+    def on_inventory_item_selected(self, item_id: int):
+        """
+        Handle inventory item selection - highlight and center on canvas.
+
+        Args:
+            item_id: ID of selected inventory item
+        """
+        # Clear all highlights first
+        for item in self.scene.items():
+            if isinstance(item, InventoryMarker):
+                item.set_highlighted(False)
+
+        # Find and highlight matching markers
+        found_marker = None
+        for item in self.scene.items():
+            if isinstance(item, InventoryMarker):
+                if item.get_item_id() == item_id:
+                    item.set_highlighted(True)
+                    if not found_marker:
+                        found_marker = item
+
+        # Center view on first found marker
+        if found_marker:
+            self.view.centerOn(found_marker.pos())
+            self.statusBar().showMessage(f"Located '{found_marker.item.name}' on floor plan", 3000)
 
     # Event Handling
 

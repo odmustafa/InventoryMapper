@@ -7,7 +7,7 @@ Implements QGraphicsView with mouse-based navigation and zoom controls.
 from typing import Optional
 from PySide6.QtWidgets import QGraphicsView
 from PySide6.QtCore import Qt, QPointF, Signal, QEvent
-from PySide6.QtGui import QPainter, QWheelEvent, QMouseEvent, QCursor
+from PySide6.QtGui import QPainter, QWheelEvent, QMouseEvent, QCursor, QDragEnterEvent, QDragMoveEvent, QDropEvent
 
 from app.constants import MIN_ZOOM, MAX_ZOOM, DEFAULT_ZOOM
 
@@ -24,10 +24,12 @@ class CanvasView(QGraphicsView):
     Signals:
         zoom_changed: Emitted when zoom level changes (zoom_factor)
         mouse_position_changed: Emitted when mouse moves (scene_pos)
+        inventory_item_dropped: Emitted when inventory item dropped (item_id, scene_pos)
     """
 
     zoom_changed = Signal(float)
     mouse_position_changed = Signal(QPointF)
+    inventory_item_dropped = Signal(int, QPointF)
 
     def __init__(self, parent=None):
         """
@@ -59,6 +61,9 @@ class CanvasView(QGraphicsView):
 
         # Enable mouse tracking for position updates
         self.setMouseTracking(True)
+
+        # Enable drag and drop for inventory items
+        self.setAcceptDrops(True)
 
     @property
     def zoom_factor(self) -> float:
@@ -280,3 +285,51 @@ class CanvasView(QGraphicsView):
             margin: Margin in pixels
         """
         self.ensureVisible(point.x(), point.y(), margin, margin)
+
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        """
+        Handle drag enter events for inventory items.
+
+        Args:
+            event: Drag enter event
+        """
+        # Accept inventory item drags
+        if event.mimeData().hasFormat("application/x-inventory-item-id"):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: QDragMoveEvent):
+        """
+        Handle drag move events for inventory items.
+
+        Args:
+            event: Drag move event
+        """
+        # Accept inventory item drags
+        if event.mimeData().hasFormat("application/x-inventory-item-id"):
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent):
+        """
+        Handle drop events for inventory items.
+
+        Args:
+            event: Drop event
+        """
+        # Extract item ID from mime data
+        if event.mimeData().hasFormat("application/x-inventory-item-id"):
+            item_id_bytes = event.mimeData().data("application/x-inventory-item-id")
+            item_id = int(item_id_bytes.data().decode())
+
+            # Convert drop position to scene coordinates
+            scene_pos = self.mapToScene(event.pos())
+
+            # Emit signal for MainWindow to handle
+            self.inventory_item_dropped.emit(item_id, scene_pos)
+
+            event.acceptProposedAction()
+        else:
+            event.ignore()
