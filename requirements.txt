@@ -1,0 +1,30 @@
+# Core GUI Framework
+PySide6>=6.8.0
+
+# Image Processing
+Pillow>=10.1.0
+
+# Google Sheets Integration
+gspread>=6.0.0
+google-auth-oauthlib>=1.2.0
+google-auth>=2.25.2
+
+# HTTP Requests
+requests>=2.31.0
+
+# Configuration Management
+python-dotenv>=1.0.0
+
+# Application Packaging
+PyInstaller>=6.3.0
+
+# Cross-platform Directories
+appdirs>=1.4.4
+
+# Data Validation
+jsonschema>=4.20.0
+
+# Development Dependencies (optional)
+pytest>=7.4.3
+pytest-qt>=4.2.0
+black>=23.12.1
