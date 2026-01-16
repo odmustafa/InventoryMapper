@@ -12,12 +12,17 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QFileDialog,
+    QInputDialog,
+    QButtonGroup,
 )
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence, QIcon
+from PySide6.QtCore import Qt, QTimer, QPointF
+from PySide6.QtGui import QAction, QKeySequence, QIcon, QMouseEvent
 
 from app.ui.widgets.canvas_scene import CanvasScene
 from app.ui.widgets.canvas_view import CanvasView
+from app.ui.widgets.layer_panel import LayerPanel
+from app.controllers.drawing_controller import DrawingController, DrawingTool
+from app.models.floor_plan import FloorPlan
 from app.config import get_config
 from app.constants import (
     APP_NAME,
@@ -61,9 +66,14 @@ class MainWindow(QMainWindow):
         # Configuration
         self.config = get_config()
 
+        # Controllers
+        self.drawing_controller = None
+        self.current_floor_plan = None
+
         # Setup UI components
         self.setup_window()
         self.setup_canvas()
+        self.setup_controllers()
         self.setup_menus()
         self.setup_toolbars()
         self.setup_dock_panels()
@@ -99,6 +109,13 @@ class MainWindow(QMainWindow):
         self.scene.set_grid_visible(self.config.grid_visible)
         self.scene.set_grid_size(self.config.grid_size)
         self.scene.set_snap_enabled(self.config.snap_to_grid)
+
+        # Install event filter for mouse events
+        self.view.viewport().installEventFilter(self)
+
+    def setup_controllers(self):
+        """Initialize controllers."""
+        self.drawing_controller = DrawingController(self.scene)
 
     def setup_menus(self):
         """Create menu bar and menus."""
@@ -230,16 +247,50 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.action_zoom_out)
         toolbar.addAction(self.action_zoom_fit)
 
-        # Drawing tools toolbar (placeholder for future)
-        # Will be populated in Phase 2 with drawing tools
+        # Drawing tools toolbar
+        drawing_toolbar = QToolBar("Drawing Tools")
+        drawing_toolbar.setMovable(False)
+        self.addToolBar(Qt.LeftToolBarArea, drawing_toolbar)
+
+        # Create button group for exclusive tool selection
+        self.tool_button_group = QButtonGroup(self)
+        self.tool_button_group.setExclusive(True)
+
+        # Select tool
+        self.action_tool_select = QAction("Select", self)
+        self.action_tool_select.setCheckable(True)
+        self.action_tool_select.setChecked(True)
+        self.action_tool_select.setStatusTip("Select and move items")
+        drawing_toolbar.addAction(self.action_tool_select)
+
+        # Rectangle tool
+        self.action_tool_rectangle = QAction("Rectangle", self)
+        self.action_tool_rectangle.setCheckable(True)
+        self.action_tool_rectangle.setStatusTip("Draw rectangles")
+        drawing_toolbar.addAction(self.action_tool_rectangle)
+
+        # Line tool
+        self.action_tool_line = QAction("Line", self)
+        self.action_tool_line.setCheckable(True)
+        self.action_tool_line.setStatusTip("Draw lines")
+        drawing_toolbar.addAction(self.action_tool_line)
+
+        # Polygon tool
+        self.action_tool_polygon = QAction("Polygon", self)
+        self.action_tool_polygon.setCheckable(True)
+        self.action_tool_polygon.setStatusTip("Draw polygons (click to add points, double-click to finish)")
+        drawing_toolbar.addAction(self.action_tool_polygon)
 
     def setup_dock_panels(self):
         """Create dock panels."""
-        # Dock panels will be implemented in later phases
-        # Phase 3: Inventory panel
-        # Phase 2: Layer panel
-        # Phase 2: Property panel
-        pass
+        # Layer panel (Phase 2)
+        self.layer_panel = LayerPanel()
+        layer_dock = QDockWidget("Layers", self)
+        layer_dock.setWidget(self.layer_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, layer_dock)
+
+        # Inventory panel (Phase 3)
+        # Property panel (Phase 2 - future enhancement)
 
     def setup_statusbar(self):
         """Create status bar."""
@@ -261,6 +312,9 @@ class MainWindow(QMainWindow):
     def setup_connections(self):
         """Connect signals and slots."""
         # File menu
+        self.action_new.triggered.connect(self.new_floor_plan)
+        self.action_open.triggered.connect(self.open_floor_plan)
+        self.action_save.triggered.connect(self.save_floor_plan)
         self.action_exit.triggered.connect(self.close)
         self.action_about.triggered.connect(self.show_about)
 
@@ -273,6 +327,18 @@ class MainWindow(QMainWindow):
         self.action_zoom_fit.triggered.connect(self.view.zoom_fit)
         self.action_show_grid.toggled.connect(self.toggle_grid)
         self.action_snap_to_grid.toggled.connect(self.toggle_snap)
+
+        # Drawing tools
+        self.action_tool_select.triggered.connect(lambda: self.set_drawing_tool(DrawingTool.SELECT))
+        self.action_tool_rectangle.triggered.connect(lambda: self.set_drawing_tool(DrawingTool.RECTANGLE))
+        self.action_tool_line.triggered.connect(lambda: self.set_drawing_tool(DrawingTool.LINE))
+        self.action_tool_polygon.triggered.connect(lambda: self.set_drawing_tool(DrawingTool.POLYGON))
+
+        # Layer panel signals
+        self.layer_panel.layer_selected.connect(self.on_layer_selected)
+        self.layer_panel.layer_visibility_changed.connect(self.on_layer_visibility_changed)
+        self.layer_panel.layer_created.connect(self.on_layer_created)
+        self.layer_panel.layer_deleted.connect(self.on_layer_deleted)
 
         # Canvas signals
         self.view.zoom_changed.connect(self.update_zoom_label)
@@ -339,6 +405,165 @@ class MainWindow(QMainWindow):
             f"<li>Export to multiple formats</li>"
             f"</ul>"
         )
+
+    # Floor Plan Operations
+
+    def new_floor_plan(self):
+        """Create a new floor plan."""
+        # Prompt for floor plan name
+        name, ok = QInputDialog.getText(
+            self,
+            "New Floor Plan",
+            "Enter floor plan name:",
+            text="Untitled Floor Plan"
+        )
+
+        if ok and name:
+            # Create floor plan
+            floor_plan = FloorPlan(name=name)
+            floor_plan.save()
+
+            # Set as current
+            self.current_floor_plan = floor_plan
+            self.drawing_controller.set_floor_plan(floor_plan)
+
+            # Update layer panel
+            self.layer_panel.set_floor_plan(floor_plan)
+
+            # Clear canvas
+            self.scene.clear()
+
+            # Update title
+            self.setWindowTitle(f"{APP_NAME} - {name}")
+
+            self.statusBar().showMessage(f"Created new floor plan: {name}", 3000)
+
+    def open_floor_plan(self):
+        """Open an existing floor plan."""
+        # Get all floor plans
+        floor_plans = FloorPlan.load_all()
+
+        if not floor_plans:
+            QMessageBox.information(self, "No Floor Plans", "No floor plans found. Create a new one first.")
+            return
+
+        # Create selection dialog
+        names = [f"{fp.name} (ID: {fp.id})" for fp in floor_plans]
+        name, ok = QInputDialog.getItem(
+            self,
+            "Open Floor Plan",
+            "Select floor plan:",
+            names,
+            0,
+            False
+        )
+
+        if ok and name:
+            # Extract ID from name
+            fp_id = int(name.split("ID: ")[1].rstrip(")"))
+
+            # Load floor plan
+            floor_plan = FloorPlan.load(fp_id)
+            if floor_plan:
+                self.current_floor_plan = floor_plan
+                self.drawing_controller.set_floor_plan(floor_plan)
+                self.drawing_controller.load_floor_plan_shapes(floor_plan)
+
+                # Update layer panel
+                self.layer_panel.set_floor_plan(floor_plan)
+
+                # Update title
+                self.setWindowTitle(f"{APP_NAME} - {floor_plan.name}")
+
+                self.statusBar().showMessage(f"Opened floor plan: {floor_plan.name}", 3000)
+
+    def save_floor_plan(self):
+        """Save current floor plan."""
+        if not self.current_floor_plan:
+            QMessageBox.warning(self, "No Floor Plan", "Please create or open a floor plan first.")
+            return
+
+        # Save floor plan metadata
+        self.current_floor_plan.save()
+
+        # Save all shapes
+        self.drawing_controller.save_all_shapes()
+
+        self.statusBar().showMessage("Floor plan saved successfully", 3000)
+
+    # Drawing Tool Operations
+
+    def set_drawing_tool(self, tool: DrawingTool):
+        """
+        Set active drawing tool.
+
+        Args:
+            tool: Drawing tool to activate
+        """
+        self.drawing_controller.set_tool(tool)
+
+        # Update UI
+        self.action_tool_select.setChecked(tool == DrawingTool.SELECT)
+        self.action_tool_rectangle.setChecked(tool == DrawingTool.RECTANGLE)
+        self.action_tool_line.setChecked(tool == DrawingTool.LINE)
+        self.action_tool_polygon.setChecked(tool == DrawingTool.POLYGON)
+
+    # Layer Operations
+
+    def on_layer_selected(self, layer_id: int):
+        """Handle layer selection."""
+        self.drawing_controller.set_current_layer(layer_id)
+
+    def on_layer_visibility_changed(self, layer_id: int, visible: bool):
+        """Handle layer visibility change."""
+        self.scene.set_layer_visibility(layer_id, visible)
+
+    def on_layer_created(self, layer_id: int):
+        """Handle new layer creation."""
+        self.drawing_controller.set_current_layer(layer_id)
+
+    def on_layer_deleted(self, layer_id: int):
+        """Handle layer deletion."""
+        self.scene.remove_layer_items(layer_id)
+
+    # Event Handling
+
+    def eventFilter(self, obj, event):
+        """
+        Event filter for canvas mouse events.
+
+        Args:
+            obj: Object that received event
+            event: Event
+
+        Returns:
+            True if event was handled, False otherwise
+        """
+        if obj == self.view.viewport():
+            if event.type() == event.Type.MouseButtonPress:
+                if event.button() == Qt.LeftButton:
+                    # Convert to scene coordinates
+                    scene_pos = self.view.mapToScene(event.pos())
+                    self.drawing_controller.start_shape(scene_pos)
+                    return False  # Let view handle it too
+
+            elif event.type() == event.Type.MouseMove:
+                if self.drawing_controller.drawing_in_progress:
+                    scene_pos = self.view.mapToScene(event.pos())
+                    self.drawing_controller.update_shape(scene_pos)
+                    return False
+
+            elif event.type() == event.Type.MouseButtonRelease:
+                if event.button() == Qt.LeftButton:
+                    self.drawing_controller.finish_shape()
+                    return False
+
+            elif event.type() == event.Type.MouseButtonDblClick:
+                if event.button() == Qt.LeftButton:
+                    self.drawing_controller.finish_polygon()
+                    return False
+
+        return super().eventFilter(obj, event)
 
     def restore_state(self):
         """Restore window state from settings."""
