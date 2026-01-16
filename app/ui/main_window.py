@@ -15,13 +15,17 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QButtonGroup,
 )
+from typing import Optional
 from PySide6.QtCore import Qt, QTimer, QPointF
 from PySide6.QtGui import QAction, QKeySequence, QIcon, QMouseEvent
 
 from app.ui.widgets.canvas_scene import CanvasScene
 from app.ui.widgets.canvas_view import CanvasView
 from app.ui.widgets.layer_panel import LayerPanel
+from app.ui.widgets.inventory_panel import InventoryPanel
+from app.ui.dialogs.item_editor import ItemEditorDialog
 from app.controllers.drawing_controller import DrawingController, DrawingTool
+from app.controllers.inventory_controller import InventoryController
 from app.models.floor_plan import FloorPlan
 from app.config import get_config
 from app.constants import (
@@ -68,6 +72,7 @@ class MainWindow(QMainWindow):
 
         # Controllers
         self.drawing_controller = None
+        self.inventory_controller = InventoryController()
         self.current_floor_plan = None
 
         # Setup UI components
@@ -290,7 +295,13 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.RightDockWidgetArea, layer_dock)
 
         # Inventory panel (Phase 3)
-        # Property panel (Phase 2 - future enhancement)
+        self.inventory_panel = InventoryPanel()
+        inventory_dock = QDockWidget("Inventory", self)
+        inventory_dock.setWidget(self.inventory_panel)
+        self.addDockWidget(Qt.RightDockWidgetArea, inventory_dock)
+
+        # Tabify the dock widgets
+        self.tabifyDockWidget(layer_dock, inventory_dock)
 
     def setup_statusbar(self):
         """Create status bar."""
@@ -339,6 +350,15 @@ class MainWindow(QMainWindow):
         self.layer_panel.layer_visibility_changed.connect(self.on_layer_visibility_changed)
         self.layer_panel.layer_created.connect(self.on_layer_created)
         self.layer_panel.layer_deleted.connect(self.on_layer_deleted)
+
+        # Inventory panel signals
+        self.inventory_panel.btn_add.clicked.connect(self.add_inventory_item)
+        self.inventory_panel.btn_edit.clicked.connect(self.edit_inventory_item)
+        self.inventory_panel.btn_delete.clicked.connect(self.delete_inventory_item)
+        self.inventory_panel.item_double_clicked.connect(self.edit_inventory_item)
+
+        # Tools menu - CSV import
+        self.action_import_csv.triggered.connect(self.import_inventory_csv)
 
         # Canvas signals
         self.view.zoom_changed.connect(self.update_zoom_label)
@@ -525,6 +545,62 @@ class MainWindow(QMainWindow):
     def on_layer_deleted(self, layer_id: int):
         """Handle layer deletion."""
         self.scene.remove_layer_items(layer_id)
+
+    # Inventory Operations
+
+    def add_inventory_item(self):
+        """Show dialog to add new inventory item."""
+        dialog = ItemEditorDialog(parent=self)
+        if dialog.exec():
+            data = dialog.get_item_data()
+            self.inventory_controller.create_item(**data)
+
+    def edit_inventory_item(self, item_id: Optional[int] = None):
+        """Show dialog to edit inventory item."""
+        if item_id is None:
+            item_id = self.inventory_panel.get_selected_item_id()
+
+        if not item_id:
+            return
+
+        item = self.inventory_controller.get_item(item_id)
+        if item:
+            dialog = ItemEditorDialog(item=item, parent=self)
+            if dialog.exec():
+                data = dialog.get_item_data()
+                self.inventory_controller.update_item(item_id, **data)
+
+    def delete_inventory_item(self):
+        """Delete selected inventory item."""
+        item_id = self.inventory_panel.get_selected_item_id()
+        if not item_id:
+            return
+
+        reply = QMessageBox.question(
+            self, "Delete Item",
+            "Are you sure you want to delete this item?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            self.inventory_controller.delete_item(item_id)
+
+    def import_inventory_csv(self):
+        """Import inventory from CSV file."""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Import Inventory CSV", "", "CSV Files (*.csv)"
+        )
+
+        if file_path:
+            count, errors = self.inventory_controller.import_from_csv(file_path)
+
+            if errors:
+                error_msg = "\n".join(errors[:10])  # Show first 10 errors
+                if len(errors) > 10:
+                    error_msg += f"\n... and {len(errors) - 10} more errors"
+                QMessageBox.warning(self, "Import Errors", f"Imported {count} items with errors:\n\n{error_msg}")
+            else:
+                QMessageBox.information(self, "Import Complete", f"Successfully imported {count} items.")
 
     # Event Handling
 

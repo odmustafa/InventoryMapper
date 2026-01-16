@@ -4,16 +4,32 @@ A cross-platform desktop application for creating interactive floor plans with s
 
 ## Features
 
-### Phase 1: Core Infrastructure ✅ (Current)
+### Phase 1: Core Infrastructure ✅ Complete
 - [x] SQLite database with full-text search
 - [x] Interactive canvas with pan and zoom
 - [x] Grid display and snapping
 - [x] Basic application window with menus
 - [x] Configuration management
 
+### Phase 2: Vector Drawing Tools ✅ Complete
+- [x] Rectangle, line, and polygon drawing tools
+- [x] Layer management panel (create, rename, delete, show/hide)
+- [x] Mouse-driven drawing interface
+- [x] Save/load floor plans to database
+- [x] Shape serialization and persistence
+- [x] Drawing toolbar with tool selection
+
+### Phase 3: Inventory Management ✅ Complete
+- [x] Full CRUD operations for inventory items
+- [x] Inventory panel with searchable table view
+- [x] Item editor dialog for add/edit operations
+- [x] FTS5 full-text search across inventory
+- [x] Category management system
+- [x] CSV import for bulk inventory loading
+- [x] Stock status indicators (in stock, low stock, out of stock)
+- [x] Color-coded status display
+
 ### Upcoming Phases
-- **Phase 2**: Vector drawing tools (rectangles, lines, polygons, layers)
-- **Phase 3**: Inventory management (CRUD, search, categories)
 - **Phase 4**: Spatial inventory placement on floor plans
 - **Phase 5**: Google Sheets two-way synchronization
 - **Phase 6**: Export/import (JSON, CSV, PNG, PDF)
@@ -71,24 +87,43 @@ On first launch, the application will:
 - Create a database at `~/Library/Application Support/InventoryMapper/inventory_mapper.db` (macOS)
 - Display an empty canvas ready for floor plan creation
 
-### Current Functionality (Phase 1)
+### Current Functionality (Phases 1-3)
+
+- **Floor Plan Management:**
+  - **Create:** Ctrl+N to create new floor plan with custom name
+  - **Open:** Ctrl+O to load existing floor plans
+  - **Save:** Ctrl+S to persist floor plan and all shapes to database
+  - **Layer Management:** Create, rename, delete, show/hide layers
+
+- **Drawing Tools:** (Left toolbar)
+  - **Select Tool:** Move and manipulate existing shapes
+  - **Rectangle Tool:** Click-drag-release to draw rectangles
+  - **Line Tool:** Click-drag-release to draw lines
+  - **Polygon Tool:** Click to add vertices, double-click to finish
+  - **Grid Snapping:** Automatically snap shapes to grid for precision
 
 - **Canvas Navigation:**
   - **Pan:** Middle mouse button + drag OR Spacebar + left mouse drag
   - **Zoom:** Ctrl + Mouse wheel OR View menu → Zoom In/Out
   - **Zoom to Fit:** Ctrl+0 or View menu → Zoom to Fit
 
-- **View Options:**
-  - Toggle grid visibility: View menu → Show Grid
-  - Toggle snap to grid: View menu → Snap to Grid
+- **Inventory Management:** (Right panel - Inventory tab)
+  - **Add Items:** Click "Add Item" button for item editor dialog
+  - **Edit Items:** Double-click item or select and click "Edit Item"
+  - **Delete Items:** Select item and click "Delete Item"
+  - **Search:** Real-time full-text search across all inventory
+  - **Import CSV:** Tools menu → Import Inventory CSV for bulk loading
+  - **Stock Status:** Color-coded indicators (Green=In Stock, Orange=Low, Red=Out)
 
 - **Keyboard Shortcuts:**
-  - `Ctrl+N`: New floor plan (placeholder)
-  - `Ctrl+O`: Open floor plan (placeholder)
-  - `Ctrl+S`: Save (placeholder)
+  - `Ctrl+N`: New floor plan
+  - `Ctrl+O`: Open floor plan
+  - `Ctrl+S`: Save floor plan
   - `Ctrl+=`: Zoom in
   - `Ctrl+-`: Zoom out
   - `Ctrl+0`: Zoom to fit
+  - `Ctrl+F`: Find inventory (focus search)
+  - `Delete`: Delete selected shapes
   - `Ctrl+Q`: Exit application
 
 ## Project Structure
