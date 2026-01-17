@@ -39,8 +39,19 @@ A cross-platform desktop application for creating interactive floor plans with s
 - [x] Item tooltips showing details on hover
 - [x] Double-click markers to edit item (via scene signal)
 
+### Phase 5: Google Sheets Synchronization ✅ Complete
+- [x] OAuth 2.0 authentication flow with Google
+- [x] Create new Google Sheets or connect to existing
+- [x] Two-way synchronization with hash-based change detection
+- [x] Conflict resolution dialog for simultaneous edits
+- [x] Auto-sync timer (configurable, default 5 minutes)
+- [x] Sync status indicator in status bar
+- [x] Manual sync trigger
+- [x] Push local changes to remote
+- [x] Pull remote changes to local
+- [x] SHA256 hashing for change detection
+
 ### Upcoming Phases
-- **Phase 5**: Google Sheets two-way synchronization
 - **Phase 6**: Export/import (JSON, CSV, PNG, PDF)
 - **Phase 7**: Cross-platform packaging
 - **Phase 8**: Reseller features (eBay comp data, product images)
@@ -49,6 +60,10 @@ A cross-platform desktop application for creating interactive floor plans with s
 
 - Python 3.9 or higher
 - macOS, Windows, or Linux
+- **For Google Sheets sync (optional):**
+  - Google Cloud Console project
+  - Google Sheets API enabled
+  - OAuth 2.0 credentials (Desktop app)
 
 ## Installation
 
@@ -124,13 +139,22 @@ On first launch, the application will:
   - **Import CSV:** Tools menu → Import Inventory CSV for bulk loading
   - **Stock Status:** Color-coded indicators (Green=In Stock, Orange=Low, Red=Out)
 
-- **Spatial Inventory Placement:** (Phase 4 - NEW!)
+- **Spatial Inventory Placement:** (Phase 4)
   - **Drag to Place:** Drag items from inventory panel onto floor plan canvas
   - **Visual Markers:** Color-coded circular markers show item locations
   - **Search & Find:** Click item in inventory panel to highlight and center on map
   - **Persistent Storage:** Marker positions saved and restored with floor plans
   - **Item Details:** Hover over markers for tooltips with item info
   - **Grid Snapping:** Markers snap to grid for organized placement
+
+- **Google Sheets Synchronization:** (Phase 5 - NEW!)
+  - **Setup:** Tools menu → Setup Google Sheets to authenticate and configure
+  - **Manual Sync:** Tools menu → Sync Now to sync on demand
+  - **Auto-Sync:** Tools menu → Auto-Sync to enable automatic syncing every 5 minutes
+  - **Two-Way Sync:** Changes sync both directions (local ↔ Google Sheets)
+  - **Conflict Resolution:** Visual dialog shows conflicts with side-by-side comparison
+  - **Change Detection:** SHA256 hashing detects what changed since last sync
+  - **Status Indicator:** Status bar shows sync status and last sync time
 
 - **Keyboard Shortcuts:**
   - `Ctrl+N`: New floor plan
@@ -237,7 +261,7 @@ pip freeze > requirements.txt
 - Search to highlight on map
 - Persistent marker storage
 
-### Phase 5: Google Sheets Sync (Weeks 8-9)
+### Phase 5: Google Sheets Sync ✅ Complete
 - OAuth 2.0 authentication
 - Two-way synchronization
 - Conflict resolution

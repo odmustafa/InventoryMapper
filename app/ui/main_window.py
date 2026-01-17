@@ -25,8 +25,11 @@ from app.ui.widgets.layer_panel import LayerPanel
 from app.ui.widgets.inventory_panel import InventoryPanel
 from app.ui.graphics_items.inventory_marker import InventoryMarker
 from app.ui.dialogs.item_editor import ItemEditorDialog
+from app.ui.dialogs.google_sheets_dialog import GoogleSheetsDialog
+from app.ui.dialogs.conflict_resolution_dialog import ConflictResolutionDialog
 from app.controllers.drawing_controller import DrawingController, DrawingTool
 from app.controllers.inventory_controller import InventoryController
+from app.controllers.sync_controller import SyncController, SyncConflict
 from app.models.floor_plan import FloorPlan
 from app.models.inventory_item import InventoryItem
 from app.config import get_config
@@ -75,7 +78,14 @@ class MainWindow(QMainWindow):
         # Controllers
         self.drawing_controller = None
         self.inventory_controller = InventoryController()
+        self.sync_controller = SyncController()
         self.current_floor_plan = None
+
+        # Auto-sync timer
+        self.auto_sync_timer = QTimer(self)
+        self.auto_sync_timer.timeout.connect(self.auto_sync)
+        self.auto_sync_enabled = False
+        self.auto_sync_interval = 5 * 60 * 1000  # 5 minutes in milliseconds
 
         # Setup UI components
         self.setup_window()
@@ -217,9 +227,24 @@ class MainWindow(QMainWindow):
         # Tools Menu
         tools_menu = menubar.addMenu("&Tools")
 
-        self.action_sync = QAction("&Sync with Google Sheets", self)
-        self.action_sync.setStatusTip("Synchronize inventory with Google Sheets")
-        tools_menu.addAction(self.action_sync)
+        # Google Sheets sync submenu
+        self.action_setup_sync = QAction("Setup &Google Sheets...", self)
+        self.action_setup_sync.setStatusTip("Configure Google Sheets synchronization")
+        tools_menu.addAction(self.action_setup_sync)
+
+        self.action_sync_now = QAction("Sync &Now", self)
+        self.action_sync_now.setStatusTip("Synchronize inventory with Google Sheets")
+        self.action_sync_now.setEnabled(False)
+        tools_menu.addAction(self.action_sync_now)
+
+        self.action_auto_sync = QAction("&Auto-Sync", self)
+        self.action_auto_sync.setCheckable(True)
+        self.action_auto_sync.setChecked(False)
+        self.action_auto_sync.setStatusTip("Automatically sync every 5 minutes")
+        self.action_auto_sync.setEnabled(False)
+        tools_menu.addAction(self.action_auto_sync)
+
+        tools_menu.addSeparator()
 
         self.action_import_csv = QAction("&Import Inventory CSV...", self)
         self.action_import_csv.setStatusTip("Import inventory items from CSV file")
@@ -360,8 +385,16 @@ class MainWindow(QMainWindow):
         self.inventory_panel.item_double_clicked.connect(self.edit_inventory_item)
         self.inventory_panel.item_selected.connect(self.on_inventory_item_selected)
 
-        # Tools menu - CSV import
+        # Tools menu - CSV import and sync
         self.action_import_csv.triggered.connect(self.import_inventory_csv)
+        self.action_setup_sync.triggered.connect(self.setup_google_sheets)
+        self.action_sync_now.triggered.connect(self.sync_now)
+        self.action_auto_sync.toggled.connect(self.toggle_auto_sync)
+
+        # Sync controller signals
+        self.sync_controller.status_changed.connect(self.update_sync_status)
+        self.sync_controller.sync_conflict.connect(self.handle_sync_conflict)
+        self.sync_controller.sync_completed.connect(self.on_sync_completed)
 
         # Canvas signals
         self.view.zoom_changed.connect(self.update_zoom_label)
@@ -608,6 +641,99 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Import Errors", f"Imported {count} items with errors:\n\n{error_msg}")
             else:
                 QMessageBox.information(self, "Import Complete", f"Successfully imported {count} items.")
+
+    # Google Sheets Sync Operations
+
+    def setup_google_sheets(self):
+        """Show Google Sheets setup dialog."""
+        dialog = GoogleSheetsDialog(self.sync_controller, self)
+        if dialog.exec():
+            # Enable sync actions
+            self.action_sync_now.setEnabled(True)
+            self.action_auto_sync.setEnabled(True)
+            self.statusBar().showMessage("Google Sheets configured successfully", 3000)
+
+    def sync_now(self):
+        """Trigger manual synchronization."""
+        if not self.sync_controller.is_configured():
+            QMessageBox.warning(
+                self,
+                "Sync Not Configured",
+                "Please configure Google Sheets sync first (Tools → Setup Google Sheets)."
+            )
+            return
+
+        # Perform sync
+        self.statusBar().showMessage("Synchronizing...", 0)
+        self.sync_controller.sync()
+
+    def toggle_auto_sync(self, enabled: bool):
+        """
+        Toggle auto-sync on/off.
+
+        Args:
+            enabled: True to enable auto-sync, False to disable
+        """
+        self.auto_sync_enabled = enabled
+
+        if enabled:
+            self.auto_sync_timer.start(self.auto_sync_interval)
+            self.statusBar().showMessage("Auto-sync enabled (every 5 minutes)", 3000)
+        else:
+            self.auto_sync_timer.stop()
+            self.statusBar().showMessage("Auto-sync disabled", 3000)
+
+    def auto_sync(self):
+        """Perform automatic synchronization."""
+        if self.sync_controller.is_configured() and self.auto_sync_enabled:
+            self.sync_controller.sync()
+
+    def update_sync_status(self, message: str):
+        """
+        Update sync status label.
+
+        Args:
+            message: Status message
+        """
+        self.sync_label.setText(f"Sync: {message}")
+
+    def handle_sync_conflict(self, conflict: SyncConflict):
+        """
+        Handle sync conflict.
+
+        Args:
+            conflict: Sync conflict object
+        """
+        # Collect all pending conflicts
+        conflicts = self.sync_controller.get_pending_conflicts()
+
+        if conflicts:
+            # Show conflict resolution dialog
+            dialog = ConflictResolutionDialog(conflicts, self)
+            if dialog.exec():
+                # Apply resolutions
+                resolutions = dialog.get_resolutions()
+                for i, conflict in enumerate(conflicts):
+                    use_local = resolutions.get(i, True)
+                    self.sync_controller.resolve_conflict(conflict, use_local)
+
+                # Retry sync
+                self.sync_controller.sync(resolve_conflicts=True)
+
+    def on_sync_completed(self, success: bool, message: str):
+        """
+        Handle sync completion.
+
+        Args:
+            success: True if sync successful
+            message: Result message
+        """
+        if success:
+            self.statusBar().showMessage(message, 3000)
+            # Refresh inventory display
+            self.inventory_panel.refresh_items()
+        else:
+            QMessageBox.warning(self, "Sync Failed", message)
 
     def on_inventory_item_dropped(self, item_id: int, scene_pos: QPointF):
         """
